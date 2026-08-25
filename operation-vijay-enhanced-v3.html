@@ -280,9 +280,7 @@
 </head>
 <body>
 
-<audio id="bgMusic" loop preload="metadata">
-    <source src="audio.mp3" type="audio/mpeg">
-</audio>
+<audio id="bgMusic" preload="auto"></audio>
 
 <div id="loading">
   <div class="txt" id="loading-txt">LOADING THEATRE</div>
@@ -788,21 +786,115 @@
     }
     return path[path.length-1];
   }
-  const bgMusic = document.getElementById('bgMusic');
-  bgMusic.volume = 0.25;
+  /* bg music */
 
-  bgMusic.addEventListener('loadedmetadata', () => {
-      // Pick a random point anywhere in the audio
-      const randomStart = Math.random() * bgMusic.duration;
+const bgMusic = document.getElementById('bgMusic');
 
-      bgMusic.currentTime = randomStart;
-  });
+bgMusic.volume = 0.25;
 
-  // Start when user enters/clicks the website
-  document.addEventListener('click', () => {
-      bgMusic.play();
-  }, { once: true });
+let userInteracted = false;
+let audioReady = false;
+let musicStarted = false;
 
+async function prepareAudio() {
+    try {
+        console.log("Downloading full audio file...");
+
+        // Download the complete MP3
+        const response = await fetch('background.mp3');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load audio: ${response.status}`);
+        }
+
+        const audioBlob = await response.blob();
+
+        console.log(
+            "Full audio downloaded:",
+            (audioBlob.size / 1024 / 1024).toFixed(2),
+            "MB"
+        );
+
+        // Give the complete file to the audio player
+        const audioURL = URL.createObjectURL(audioBlob);
+        bgMusic.src = audioURL;
+
+        // Wait until duration is available
+        await new Promise(resolve => {
+            bgMusic.addEventListener(
+                'loadedmetadata',
+                resolve,
+                { once: true }
+            );
+        });
+
+        console.log("Audio duration:", bgMusic.duration);
+
+        // Pick random position
+        const randomStart =
+            Math.random() * Math.max(1, bgMusic.duration - 5);
+
+        console.log(
+            "RANDOM POSITION:",
+            randomStart.toFixed(2),
+            "seconds"
+        );
+
+        // Seek
+        bgMusic.currentTime = randomStart;
+
+        // Wait until seeking actually completes
+        await new Promise(resolve => {
+            bgMusic.addEventListener(
+                'seeked',
+                resolve,
+                { once: true }
+            );
+        });
+
+        console.log(
+            "SEEK COMPLETE:",
+            bgMusic.currentTime.toFixed(2)
+        );
+
+        audioReady = true;
+        tryPlay();
+
+    } catch (error) {
+        console.error("Audio preparation failed:", error);
+    }
+}
+
+function tryPlay() {
+    if (!userInteracted || !audioReady || musicStarted) return;
+
+    musicStarted = true;
+
+    bgMusic.play()
+        .then(() => {
+            console.log(
+                "PLAYING FROM:",
+                bgMusic.currentTime.toFixed(2)
+            );
+        })
+        .catch(error => {
+            musicStarted = false;
+            console.error("Audio play failed:", error);
+        });
+}
+
+// Unlock audio on first interaction anywhere
+function unlockAudio() {
+    userInteracted = true;
+    console.log("User interaction detected");
+    tryPlay();
+}
+
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+// Start downloading immediately when website opens
+prepareAudio();
   /* ============================================================
      6. SCROLL ENGINE (native scroll, smoothed)
      ============================================================ */
